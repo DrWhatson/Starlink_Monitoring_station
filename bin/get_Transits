@@ -1,0 +1,114 @@
+#!/usr/bin/python3
+from skyfield.api import load, wgs84
+from datetime import datetime, timedelta
+import sys, os
+
+""" Script to be run a few minutes before the top of the hour
+    to find which satellite will transit, prepare ordered list
+    for the main script to pick up and use """
+
+Transits_dir = '/data/Starlink_Detector/Transits'
+TLE_dir = '/data/Starlink_Detector/TLE'
+
+dhr = 0
+if len(sys.argv)>1: 
+    dhr = int(sys.argv[1])
+
+tod = datetime.now()
+toh =  tod + timedelta(hours=1-dhr)   # Get time for in an hour 
+toh2 =  tod + timedelta(hours=2-dhr)  # Get time for in 2 hours 
+datestr = toh.strftime("%y%m%d")  # As date as string to check
+
+
+# Check if day exists in directory structure
+transit_day_dir = f"{Transits_dir}/{datestr}"
+
+# Check if directory exists and if not create it
+if not os.path.exists(transit_day_dir):
+    print(transit_day_dir,"doesn't exist")        
+    try:
+        os.makedirs(transit_day_dir)
+    except OSError:
+        print(f"Problem creating {transit_day_dir}")
+
+            
+hour_str = toh.strftime("%H")  # As date as string to check
+
+# Check if hour exists in directory structure
+transit_hour_dir = f"{transit_day_dir}/{hour_str}"
+
+# Check if directory exists and if not create it
+if not os.path.exists(transit_hour_dir):
+    print(transit_hour_dir,"doesn't exist")        
+    try:
+        os.makedirs(transit_hour_dir)
+    except OSError:
+        print(f"Problem creating {transit_hour_dir}")
+                                
+
+# Now check TLE directory            
+            
+tom_dir = f"{TLE_dir}/{datestr}"
+
+# Are TLEs available for today
+
+if not os.path.exists(tom_dir):
+    print(tom_dir,"doesn't exist, can't continue")
+    sys.exit(-1)
+
+# See what files are available
+
+TLEs = os.listdir(tom_dir)
+
+if len(TLEs)==0:
+    print(f"No files found in {tom_dir}. Can't continue")
+    sys.exit(-1)
+
+# Read TLEs over hour finding satellites    
+    
+# Start date time
+iyr1 = int(toh.strftime("%Y"))
+imn1 = int(toh.strftime("%m"))
+idy1 = int(toh.strftime("%d"))
+ihr1 = int(toh.strftime("%H"))
+
+# Finish date time
+iyr2 = int(toh2.strftime("%Y"))
+imn2 = int(toh2.strftime("%m"))
+idy2 = int(toh2.strftime("%d"))
+ihr2 = int(toh2.strftime("%H"))
+
+ts = load.timescale()
+t0 = ts.utc(iyr1, imn1, idy1, ihr1)
+t1 = ts.utc(iyr2, imn2, idy2, ihr2)
+home = wgs84.latlon(53.39820, -2.34860, 27.0)
+
+transits = {} # Dict to hold transits index on rise time
+
+for TLE in TLEs:
+    sat_name = TLE[:-4]
+    sats = load.tle_file(f"{tom_dir}/{TLE}")
+    nsat = len(sats)
+    print(f"Found {nsat} {sat_name} satellites")
+
+    for sat in sats:
+        t, events = sat.find_events(home, t0, t1, altitude_degrees=50.0)
+        if len(t)<3:
+            continue
+        elif events[0]==0: # Only interested if rising above 50 deg
+#            print(sat.name)
+            transits[t[0].tt] = [sat.name, t[1].tt,t[2].tt]
+
+keys = transits.keys()
+ordered_keys = sorted(keys)
+
+pf = open(f"{transit_hour_dir}/transits.csv","w")
+
+for key in ordered_keys:
+    value = transits[key]
+    line = f"{value[0]},{key},{value[1]},{value[2]})\n"
+#    print(key, line)
+    pf.write(line)
+    
+    
+    

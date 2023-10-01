@@ -1,0 +1,33 @@
+#!/usr/bin/python3
+import wget
+from datetime import datetime, timedelta
+import sys, os
+
+if len(sys.argv) > 1:
+    day_off = int(sys.argv[1])
+    tdelta = timedelta(days=day_off)
+else:
+    tdelta = timedelta(days=1)
+
+tom = datetime.now() + tdelta            # Get time with offset
+datestr = tom.strftime("%y%m%d")         # As string
+
+TLE_dir = '/data/Starlink_Detector/TLE'
+tom_dir = f"{TLE_dir}/{datestr}"
+
+# Check if directory exists aand if not create it
+if not os.path.exists(tom_dir):
+    print(tom_dir,"doesn't exist")
+
+    try:
+        os.makedirs(tom_dir)
+    except OSError:
+        print(f"Problem creating {tom_dir}")
+            
+url = "https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle"
+filename = wget.download(url,out=f"{tom_dir}/starlink.tle")
+
+url = "https://celestrak.org/NORAD/elements/gp.php?GROUP=oneweb&FORMAT=tle"
+filename = wget.download(url,out=f"{tom_dir}/oneweb.tle")
+
+
